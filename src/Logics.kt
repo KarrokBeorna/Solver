@@ -168,7 +168,7 @@ class Logics: Controller() {
         openingNow.clear()
         flagsNow.clear()
         tempMap.clear()
-        tempMap.addAll(indexAndNum.sortedBy { it.second })
+        tempMap.addAll(indexAndNum.sortedWith(compareBy { it.second; it.first }))
         return tempMap.first().first
     }
 
@@ -224,7 +224,12 @@ class Logics: Controller() {
                 cellsWithNums.addAll(close)
                 passed.add(current)
                 indexAndNum.remove(current to numInCurrent)
-                close.forEach { indexAndNum.add(it to listNums[it]); recheck.add(it to listNums[it]) }
+                for (i in close) {
+                    if (i !in passed) {
+                        indexAndNum.add(i to listNums[i])
+                        recheck.add(i to listNums[i])
+                    }
+                }
                 numberOfChecks = 0
             } else {
                 indexAndNum.remove(current to numInCurrent)
@@ -237,6 +242,11 @@ class Logics: Controller() {
 
         if (setFlags.all { it in listBombs }) numTrueFlags.value = setFlags.size else numTrueFlags.value = 0
 
+        /**
+         * Если в спике открывающихся есть хотя бы один пустой элемент,
+         * то открываем все клетки, рядом с этой пустой клеткой и прерываем
+         * дальнейшую проверку
+         */
         for (i in openingNow) {
             if (listNums[i] == 0) {
                 emptyCells.add(i)
@@ -245,10 +255,20 @@ class Logics: Controller() {
             }
         }
 
-        if (indexAndNum.size == 0) recheck()
+        /**
+         * Если перебираемый список становится пустым, то добавляем все ранее неоднозначные элементы
+         */
+        if (indexAndNum.isEmpty()) recheck()
 
-        if (numberOfChecks > indexAndNum.size * 5) {
-            for (i in indexAndNum) {
+        /**
+         * В случае, когда число проверок уже слишком большое, когда мы
+         * ходим по одним и тем же элементам, но не можем найти тривиальное решение,
+         * то рандомим на одну из закрытых клеток.
+         * Однако в случае, когда число проверок больше 2 проходов, то идём в обратном порядке
+         * до 4 проходов
+         */
+        if (numberOfChecks > indexAndNum.size * 4) {
+            for (i in tempMap) {
                 cellArea(i.first)
 
                 for (ind in listCellArea) {
@@ -277,9 +297,20 @@ class Logics: Controller() {
                     cellsWithNums.add(openingCell)
                 }
             }
+        } else {
+            if (numberOfChecks > indexAndNum.size * 2) {
+                tempMap.clear()
+                tempMap.addAll(indexAndNum.sortedByDescending { it.second; it.first })
+                checkBombs()
+            }
         }
     }
 
+    /**
+     * Для каждой перепроверяемой ячейки будем заново добавлять её в список
+     * перебираемых элементов, однако, если она уже есть в "бесполезных" ячейках, то
+     * навсегда забываем про неё
+     */
     private fun recheck() {
         for (cell in recheck) {
             cellArea(cell.first)

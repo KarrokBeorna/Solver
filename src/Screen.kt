@@ -270,6 +270,7 @@ class Screen: Fragment() {
             isVisible = false
             setOnMouseClicked {
                 theEnd.forEach { it.isVisible = false }
+                //frontCells.forEach { it.isVisible = false }
             }
         }
         theEnd.add(what)
