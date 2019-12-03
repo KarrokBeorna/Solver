@@ -150,7 +150,7 @@ class Screen: Fragment() {
             if (logics.numClicks.value == 0) {
                 logics.firstClick()
             } else {
-                val current = logics.backlight()
+                val current = logics.backlight().index
                 lights[current].isVisible = true
                 logics.checkBombs()
             }
@@ -181,7 +181,7 @@ class Screen: Fragment() {
             if (logics.numClicks.value == 0) {
                 logics.firstClick()
             } else {
-                val current = logics.backlight()
+                val current = logics.backlight().index
                 lights[current].isVisible = true
                 logics.checkBombs()
             }
@@ -216,7 +216,7 @@ class Screen: Fragment() {
 
     private fun cellImage() {
         for (i in 0..224) {
-            val cell = imageview("/icons/${logics.listNums[i]}.png") {
+            val cell = imageview("/icons/${logics.listCell[i].numberOfBombs}.png") {
                 translateY = 75.0 + (i / 15) * 30          //74 - board, 75-1st, 105-2nd
                 translateX = 21.0 + (i % 15) * 30
                 isVisible = true
