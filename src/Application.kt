@@ -9,7 +9,6 @@ class Solver : View("Solver") {
 
 class Application : App(Solver::class) {
     override fun start(stage: Stage) {
-        importStylesheet("/style.css")
         stage.minHeight = 630.0
         stage.minWidth = 506.0
         super.start(stage)

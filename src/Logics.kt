@@ -16,7 +16,6 @@ class Logics: Controller() {
     val flagsNow = mutableSetOf<Int>()
     var boom = false
 
-    private val openSet = mutableSetOf<Int>()
     private val emptyCells = mutableListOf<Cell>()
     private val setFlags = mutableSetOf<Int>()
     private val checkList = mutableSetOf<Cell>()
@@ -275,7 +274,13 @@ class Logics: Controller() {
  * solver для сложных случаев
  */
 
-
+/**
+ * Добавить случай, когда угловая клетка огорожена бомбами, но в ней самой нет бомб
+ * ?    ?   х   1
+ * х    х   х   2
+ * 2    2   1   1
+ * Добавить рандом в клетки с "?"
+ */
 
 
 
