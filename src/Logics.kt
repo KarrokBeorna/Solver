@@ -8,7 +8,7 @@ class Logics: Controller() {
     val numTrueFlags = SimpleIntegerProperty()
     val numClicks = SimpleIntegerProperty()
 
-    class Cell(var isVisible: Boolean = false, var flag: Boolean = false, var numberOfBombs: Int,
+    class Cell(var isVisible: Boolean = false, var flag: Boolean = false, val numberOfBombs: Int,
                val aroundCell: List<Int>, val index: Int, var useless: Boolean = false)
 
     val listCell = mutableListOf<Cell>()
@@ -20,8 +20,10 @@ class Logics: Controller() {
     private val setFlags = mutableSetOf<Int>()
     private val checkList = mutableSetOf<Cell>()
     private val recheck = mutableSetOf<Cell>()
+    // private val checkBeforeFlag = mutableSetOf<Cell>()
     private var numberOfChecks = 0
     val listBombs = mutableListOf<Int>()
+    val light = mutableListOf<Cell>()
 
 
     fun elements() {
@@ -47,7 +49,7 @@ class Logics: Controller() {
     }
 
     /**
-     * Значения в ячейках в зависимости от числа бомб, расположенных в радиусе 1
+     * Запись необходимой информации в ячейки и запись ячейки в список ячеек
      */
     private fun cells() {
         for (i in 0..224) {
@@ -61,7 +63,7 @@ class Logics: Controller() {
                 listCell.add(Cell(isVisible = false, flag = false,
                     numberOfBombs = num, aroundCell = cellArea(i),index = i, useless = false))
             } else listCell.add(Cell(isVisible = false, flag = false,
-                numberOfBombs = 9, aroundCell = emptyList(), index = i, useless = false))
+                numberOfBombs = 9, aroundCell = cellArea(i), index = i, useless = false))
         }
     }
 
@@ -171,27 +173,18 @@ class Logics: Controller() {
     }
 
     /**
-     * Выделяем ячейку, которую рассматриваем сейчас:
-     * наименьшее число бомб и наименьший индекс
+     * Функция для подсчёта
+     * - открытых,
+     * - флагнутых,
+     * - закрытых ячеек
      */
-    fun backlight(): Cell {
-        openingNow.clear()
-        flagsNow.clear()
-        return checkList.sortedWith(compareBy(Cell::numberOfBombs, Cell::index)).first()
-    }
+    private fun around(cell: Cell): Triple<Int, Int, MutableList<Int>> {
 
-    fun checkBombs() {
-
-        numClicks.value++
-        val current = backlight()
         var numOpenAround = 0
         var numberFlags = 0
         val close = mutableListOf<Int>()
 
-        /**
-         * Рассматриваем ячейки вокруг исследуемой
-         */
-        for (i in current.aroundCell) {
+        for (i in cell.aroundCell) {
 
             val researched = listCell[i]
 
@@ -203,12 +196,59 @@ class Logics: Controller() {
 
             }
         }
+        return Triple(numOpenAround, numberFlags, close)
+    }
+
+    /**
+     * Выделяем ячейку, которую рассматриваем сейчас:
+     * наименьшее число бомб и наименьший индекс
+     */
+    private fun backlight(): Cell {
+        light.clear()
+        openingNow.clear()
+        flagsNow.clear()
 
         /**
-         * Если число закрытых равно числу в ячейке, то
+         * Если список проверок вдруг опустел, то добавляем перепроверяемые
+         * ячейки, это позволит избежать выбрасывания ошибки
+         */
+        if (checkList.isEmpty()) recheck()
+
+        val temp = if (immediateCheck == null)
+            checkList.sortedWith(compareBy(Cell::numberOfBombs, Cell::index)).first()
+        else immediateCheck
+
+        light.add(temp!!)
+        return temp
+    }
+
+    fun checkBombs() {
+
+        val current = backlight()
+        val around = around(current)
+        val numOpenAround = around.first
+        val numberFlags = around.second
+        val close = around.third
+
+        /**
+         * Если ячейка еще в списке проверки, но она уже не несет никакой новой информации,
+         * то не наступаем на неё и вообще забываем навсегда
+         */
+        if (numberFlags == close.size + numberFlags) {
+            checkList.remove(current)
+            current.useless = true
+            checkBombs()
+        }
+
+        numClicks.value++
+
+        /**
+         * Если число ЗАКРЫТЫХ равно числу в ячейке, то
          * помечаем эти ячейки флажками,
-         * иначе, если число флагов уже равно числу в ячейке,
+         *
+         * иначе, если число ФЛАГОВ уже равно числу в ячейке,
          * то все закрытые ячейки открываем,
+         *
          * иначе пока что удаляем элемент из проверки и добавляем
          * его в множество повторных проверок
          */
@@ -249,39 +289,107 @@ class Logics: Controller() {
         if (setFlags.all { it in listBombs }) numTrueFlags.value = setFlags.size else numTrueFlags.value = 0
 
         if (emptyCells.isNotEmpty()) empty()
-
-        /**
-         * Если перебираемый список становится пустым, то добавляем все ранее неоднозначные элементы
-         */
-        if (checkList.isEmpty()) recheck()
     }
 
     /**
-     * Для каждой перепроверяемой ячейки будем заново добавлять её в список
-     * перебираемых элементов, однако, если она уже есть в "бесполезных" ячейках, то
-     * навсегда забываем про неё
+     * Куждую "небесполезную" перепроверяемую ячейку добавим в список проверок
      */
     private fun recheck() {
         recheck.forEach{ if(!it.useless) checkList.add(it) }
         recheck.clear()
+    }
+
+
+
+    private var immediateCheck: Cell? = null
+
+    fun difficultCase() {
+
+        light.clear()
+
+        for (cell in checkList) {
+
+            /**
+             * Первый случай - поиск двойки и прилегающие к ней единицы
+             */
+            val deuceIndex = cell.index
+
+            if (deuceIndex % 15 in 1..13 &&
+                deuceIndex / 15 in 1..13 &&
+                cell.numberOfBombs == 2) {
+
+                val left = listCell[deuceIndex - 1]
+                val right = listCell[deuceIndex + 1]
+                val top = listCell[deuceIndex - 15]
+                val bot = listCell[deuceIndex + 15]
+
+                if (left.numberOfBombs == 1 && right.numberOfBombs == 1 && left.isVisible && right.isVisible) {
+
+                    light.addAll(listOf(cell, left, right))
+                    val opening = listOf(deuceIndex - 15, deuceIndex + 15)
+                    openingNow.addAll(opening)
+                    opening.forEach { listCell[it].isVisible = true }
+                    immediateCheck = cell
+
+                    break
+                } else if (top.numberOfBombs == 1 && bot.numberOfBombs == 1 && top.isVisible && bot.isVisible) {
+
+                    light.addAll(listOf(cell, top, bot))
+                    val opening = listOf(deuceIndex - 1, deuceIndex + 1)
+                    openingNow.addAll(opening)
+                    opening.forEach { listCell[it].isVisible = true }
+                    immediateCheck = cell
+
+                    break
+                }
+
+            }
+
+        }
+
     }
 }
 
 
 /**
  * !!!NEED!!!
- * открывание по порядку, без прохода до конца: то есть поставили флаг и просмотрели все цифры рядом с этой ячейкой и перебрали их
  * solver для сложных случаев
  */
 
 /**
- * Добавить случай, когда угловая клетка огорожена бомбами, но в ней самой нет бомб
+ * Добавить случай, когда угловая клетка огорожена бомбами, но в ней самой нет бомб (нужно смотреть на кол-во флажков)
  * ?    ?   х   1
  * х    х   х   2
  * 2    2   1   1
  * Добавить рандом в клетки с "?"
+ *
+ * Добавить проверку на равенство закрытых клеток и кол-ва бомб, то есть добавить список закрытых клеток
  */
 
+/**
+ * Проход по элементам при открытии флага:
+ * for (ind in flagsNow) {
+val researched = listCell[ind]
+for (i in researched.aroundCell) {
+val cell = listCell[i]
+if (cell.isVisible) {
+checkBeforeFlag.add(cell)
+}
+}
+}
+
+\\\\\\В backlight() было//////
+var temp = checkList.sortedWith(compareBy(Cell::numberOfBombs, Cell::index)).first()
+while (temp.useless) {
+checkList.remove(temp)
+temp = checkList.sortedWith(compareBy(Cell::numberOfBombs, Cell::index)).first()
+}
+if (checkBeforeFlag.isNotEmpty()) {
+temp = checkBeforeFlag.first()
+checkBeforeFlag.remove(temp)
+}
+return temp
+ */
 
 
 

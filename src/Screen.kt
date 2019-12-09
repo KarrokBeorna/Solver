@@ -1,12 +1,9 @@
-import javafx.animation.KeyFrame
-import javafx.event.EventHandler
 import javafx.geometry.Pos
 import javafx.scene.control.Label
 import javafx.scene.image.ImageView
 import javafx.scene.layout.Pane
 import javafx.scene.paint.Color
 import javafx.scene.text.Font
-import javafx.util.Duration
 import tornadofx.*
 
 class Screen: Fragment() {
@@ -128,10 +125,20 @@ class Screen: Fragment() {
         translateY = 535.0 //524 - up 546 - down
         translateX = 235.0
         isVisible = false
-        tooltip(" Что-нибудь придумаю ") {
+        tooltip(" Решение 1 хода в сложных случаях ") {
             font = Font.font(13.0)
         }
         setOnMouseClicked {
+
+            lights.forEach { it.isVisible = false }
+
+            logics.difficultCase()
+
+            logics.light.forEach { lights[it.index].isVisible = true }
+
+            for (i in logics.openingNow) {
+                frontCells[i].isVisible = false
+            }
 
         }
     }
@@ -145,24 +152,26 @@ class Screen: Fragment() {
         }
         setOnMouseClicked {
 
-            lights.forEach { it.isVisible = false }
+            if (logics.numTrueFlags.value != logics.listBombs.size) {
 
-            if (logics.numClicks.value == 0) {
-                logics.firstClick()
-            } else {
-                val current = logics.backlight().index
-                lights[current].isVisible = true
-                logics.checkBombs()
+                lights.forEach { it.isVisible = false }
+
+                if (logics.numClicks.value == 0) {
+                    logics.firstClick()
+                } else {
+                    logics.checkBombs()
+                    val current = logics.light[0].index
+                    lights[current].isVisible = true
+                }
+
+                for (i in logics.openingNow) {
+                    frontCells[i].isVisible = false
+                }
+
+                for (i in logics.flagsNow) {
+                    flags[i].isVisible = true
+                }
             }
-
-            for (i in logics.openingNow) {
-                frontCells[i].isVisible = false
-            }
-
-            for (i in logics.flagsNow) {
-                flags[i].isVisible = true
-            }
-
             processTheEnd()
         }
     }
@@ -176,25 +185,38 @@ class Screen: Fragment() {
         }
         setOnMouseMoved {
 
-            lights.forEach { it.isVisible = false }
+            if (logics.numTrueFlags.value != logics.listBombs.size) {
 
-            if (logics.numClicks.value == 0) {
-                logics.firstClick()
-            } else {
-                val current = logics.backlight().index
-                lights[current].isVisible = true
-                logics.checkBombs()
+                lights.forEach { it.isVisible = false }
+
+                if (logics.numClicks.value == 0) {
+                    logics.firstClick()
+                } else {
+                    logics.checkBombs()
+                    val current = logics.light[0].index
+                    lights[current].isVisible = true
+                }
+
+                for (i in logics.openingNow) {
+                    frontCells[i].isVisible = false
+                }
+
+                for (i in logics.flagsNow) {
+                    flags[i].isVisible = true
+                }
             }
-
-            for (i in logics.openingNow) {
-                frontCells[i].isVisible = false
-            }
-
-            for (i in logics.flagsNow) {
-                flags[i].isVisible = true
-            }
-
             processTheEnd()
+        }
+    }
+
+    private val opening = imageview("/icons/opening.png") {
+        translateX = 0.0
+        translateY = 524.0
+        isVisible = false
+
+        setOnMouseClicked {
+            frontCells.forEach { it.isVisible = false }
+            flags.forEach { it.isVisible = false }
         }
     }
 
@@ -270,7 +292,7 @@ class Screen: Fragment() {
             isVisible = false
             setOnMouseClicked {
                 theEnd.forEach { it.isVisible = false }
-                //frontCells.forEach { it.isVisible = false }
+                opening.isVisible = true
             }
         }
         theEnd.add(what)
