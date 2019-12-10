@@ -8,22 +8,30 @@ class Logics: Controller() {
     val numTrueFlags = SimpleIntegerProperty()
     val numClicks = SimpleIntegerProperty()
 
+    /**
+     * Обязательно не data class, потому что с пометкой data
+     * перебор элементов просто не сходит с 1 элемента
+     *
+     * Почему???
+     */
     class Cell(var isVisible: Boolean = false, var flag: Boolean = false, val numberOfBombs: Int,
                val aroundCell: List<Int>, val index: Int, var useless: Boolean = false)
 
-    val listCell = mutableListOf<Cell>()
-    val openingNow = mutableSetOf<Int>()
-    val flagsNow = mutableSetOf<Int>()
+    /**
+     * Класс для выдачи данных для отображения
+     */
+    class Data(val opening: MutableSet<Int>, val flagging: MutableSet<Int>, val index: Int)
+
+    val board = mutableListOf<Cell>()
+    private val openingNow = mutableSetOf<Int>()
+    private val flagsNow = mutableSetOf<Int>()
     var boom = false
 
-    private val emptyCells = mutableListOf<Cell>()
-    private val setFlags = mutableSetOf<Int>()
-    private val checkList = mutableSetOf<Cell>()
-    private val recheck = mutableSetOf<Cell>()
-    // private val checkBeforeFlag = mutableSetOf<Cell>()
-    private var numberOfChecks = 0
+    val checkList = mutableSetOf<Cell>()
+    val recheck = mutableSetOf<Cell>()
+    var numberOfChecks = 0
     val listBombs = mutableListOf<Int>()
-    val light = mutableListOf<Cell>()
+    private val light = mutableListOf<Cell>()
 
 
     fun elements() {
@@ -60,9 +68,9 @@ class Logics: Controller() {
                     if (ind in listBombs)
                         num++
                 }
-                listCell.add(Cell(isVisible = false, flag = false,
+                board.add(Cell(isVisible = false, flag = false,
                     numberOfBombs = num, aroundCell = cellArea(i),index = i, useless = false))
-            } else listCell.add(Cell(isVisible = false, flag = false,
+            } else board.add(Cell(isVisible = false, flag = false,
                 numberOfBombs = 9, aroundCell = cellArea(i), index = i, useless = false))
         }
     }
@@ -105,9 +113,9 @@ class Logics: Controller() {
     /**
      * Первый клик и первые открытия
      */
-    fun firstClick() {
+    fun firstClick(): Data {
 
-        val first = listCell[112]
+        val first = board[112]
 
         openingNow.add(112)
         first.useless = true
@@ -115,11 +123,11 @@ class Logics: Controller() {
 
         for (i in first.aroundCell) {
 
-            val researched = listCell[i]
+            val researched = board[i]
 
             if (researched.numberOfBombs == 0) {
 
-                emptyCells.add(researched)
+                empty(researched)
                 openingNow.add(i)
 
             }
@@ -134,28 +142,24 @@ class Logics: Controller() {
 
         numClicks.value++
 
-        if (emptyCells.size != 0) empty()
-
+        return Data(openingNow, flagsNow, 112)
     }
 
     /**
      * Открытие области рядом с пустыми клетками
      */
-    private fun empty() {
+    private fun empty(cell: Cell) {
 
-        while (emptyCells.size != 0) {
+            cell.isVisible = true
+            cell.useless = true
 
-            val current = emptyCells.first()
-            current.isVisible = true
-            current.useless = true
+            for (i in cell.aroundCell) {
 
-            for (i in current.aroundCell) {
-
-                val researched = listCell[i]
+                val researched = board[i]
 
                 if (researched.numberOfBombs == 0 && !researched.useless) {
 
-                    emptyCells.add(researched)
+                    empty(researched)
                     openingNow.add(i)
 
                 }
@@ -168,8 +172,6 @@ class Logics: Controller() {
                 }
             }
 
-            emptyCells.removeAt(0)
-        }
     }
 
     /**
@@ -178,15 +180,15 @@ class Logics: Controller() {
      * - флагнутых,
      * - закрытых ячеек
      */
-    private fun around(cell: Cell): Triple<Int, Int, MutableList<Int>> {
+    private fun around(cell: Cell): Triple<Int, Int, MutableSet<Int>> {
 
         var numOpenAround = 0
         var numberFlags = 0
-        val close = mutableListOf<Int>()
+        val close = mutableSetOf<Int>()
 
         for (i in cell.aroundCell) {
 
-            val researched = listCell[i]
+            val researched = board[i]
 
             when {
 
@@ -204,9 +206,6 @@ class Logics: Controller() {
      * наименьшее число бомб и наименьший индекс
      */
     private fun backlight(): Cell {
-        light.clear()
-        openingNow.clear()
-        flagsNow.clear()
 
         /**
          * Если список проверок вдруг опустел, то добавляем перепроверяемые
@@ -214,15 +213,20 @@ class Logics: Controller() {
          */
         if (checkList.isEmpty()) recheck()
 
-        val temp = if (immediateCheck == null)
-            checkList.sortedWith(compareBy(Cell::numberOfBombs, Cell::index)).first()
-        else immediateCheck
+        light.clear()
+        openingNow.clear()
+        flagsNow.clear()
 
-        light.add(temp!!)
+        val temp = checkList.sortedWith(compareBy(Cell::numberOfBombs, Cell::index)).first()
+
+        light.add(temp)
         return temp
     }
 
-    fun checkBombs() {
+    /**
+     * Основная функция обнаружения бомб
+     */
+    fun checkBombs(): Data {
 
         val current = backlight()
         val around = around(current)
@@ -254,11 +258,13 @@ class Logics: Controller() {
          */
         if (current.aroundCell.size - numOpenAround == current.numberOfBombs) {
 
-            setFlags.addAll(close)
-            flagsNow.addAll(close)
             checkList.remove(current)
             numberOfChecks = 0
-            close.forEach { listCell[it].flag = true }
+            for (i in close) {
+                flagsNow.add(i)
+                board[i].flag = true
+                numFlags.value++
+            }
             current.useless = true
 
         } else if (numberFlags == current.numberOfBombs) {
@@ -269,12 +275,12 @@ class Logics: Controller() {
             numberOfChecks = 0
 
             for (i in close) {
-                val researched = listCell[i]
+                val researched = board[i]
                 if (researched.numberOfBombs != 0) {
                     checkList.add(researched)
                     researched.isVisible = true
                 } else {
-                    emptyCells.add(researched)
+                    empty(researched)
                 }
             }
 
@@ -284,15 +290,13 @@ class Logics: Controller() {
             numberOfChecks++
         }
 
-        numFlags.value = setFlags.size
+        if (flagsNow.all { it in listBombs }) numTrueFlags.value = numFlags.value else numTrueFlags.value = 0
 
-        if (setFlags.all { it in listBombs }) numTrueFlags.value = setFlags.size else numTrueFlags.value = 0
-
-        if (emptyCells.isNotEmpty()) empty()
+        return Data(openingNow, flagsNow, current.index)
     }
 
     /**
-     * Куждую "небесполезную" перепроверяемую ячейку добавим в список проверок
+     * Каждую "небесполезную" перепроверяемую ячейку добавим в список проверок
      */
     private fun recheck() {
         recheck.forEach{ if(!it.useless) checkList.add(it) }
@@ -313,22 +317,35 @@ class Logics: Controller() {
              * Первый случай - поиск двойки и прилегающие к ней единицы
              */
             val deuceIndex = cell.index
+            val around = around(cell)
+
+            val left = board[deuceIndex - 1]
+            val right = board[deuceIndex + 1]
+            val top = board[deuceIndex - 15]
+            val bot = board[deuceIndex + 15]
+
+            val aroundLeft = around(left)
+            val aroundRight = around(right)
+            val aroundTop = around(top)
+            val aroundBot = around(bot)
+
+            val newNumInLeft = left.numberOfBombs - aroundLeft.second
+            val newNumInRight = right.numberOfBombs - aroundRight.second
+            val newNumInTop = top.numberOfBombs - aroundTop.second
+            val newNumInBot = bot.numberOfBombs - aroundBot.second
+
+
 
             if (deuceIndex % 15 in 1..13 &&
                 deuceIndex / 15 in 1..13 &&
                 cell.numberOfBombs == 2) {
-
-                val left = listCell[deuceIndex - 1]
-                val right = listCell[deuceIndex + 1]
-                val top = listCell[deuceIndex - 15]
-                val bot = listCell[deuceIndex + 15]
 
                 if (left.numberOfBombs == 1 && right.numberOfBombs == 1 && left.isVisible && right.isVisible) {
 
                     light.addAll(listOf(cell, left, right))
                     val opening = listOf(deuceIndex - 15, deuceIndex + 15)
                     openingNow.addAll(opening)
-                    opening.forEach { listCell[it].isVisible = true }
+                    opening.forEach { board[it].isVisible = true }
                     immediateCheck = cell
 
                     break
@@ -337,7 +354,7 @@ class Logics: Controller() {
                     light.addAll(listOf(cell, top, bot))
                     val opening = listOf(deuceIndex - 1, deuceIndex + 1)
                     openingNow.addAll(opening)
-                    opening.forEach { listCell[it].isVisible = true }
+                    opening.forEach { board[it].isVisible = true }
                     immediateCheck = cell
 
                     break
@@ -345,6 +362,43 @@ class Logics: Controller() {
 
             }
 
+            /**
+             * Второй случай - поиск "двойки" и прилегающая к ней "единица"
+             */
+
+            if (deuceIndex % 15 in 1..13 &&
+                deuceIndex / 15 in 1..13 &&
+                cell.numberOfBombs - around.second == 2 &&
+                around.first == 5) {
+
+                fun flagAndVoid(opening: Cell) {
+                    val temp = mutableListOf<Int>()
+                    for (i in opening.aroundCell) {
+                        if (i !in cell.aroundCell && (i == opening.index + 16 ||
+                                    i == opening.index + 14 || i == opening.index - 14 || i == opening.index - 16)) {
+                            temp.add(i)
+                        }
+                    }
+
+                }
+
+                if (newNumInTop == 1 && deuceIndex >= 30) {
+                    flagAndVoid(top)
+                    break
+                }
+                else if (newNumInBot == 1 && deuceIndex <= 194) {
+                    flagAndVoid(bot)
+                    break
+                }
+                else if (newNumInLeft == 1 && deuceIndex % 15 >= 2) {
+                    flagAndVoid(left)
+                    break
+                }
+                else if (newNumInRight == 1 && deuceIndex % 15 <= 12) {
+                    flagAndVoid(right)
+                    break
+                }
+            }
         }
 
     }
@@ -367,75 +421,6 @@ class Logics: Controller() {
  */
 
 /**
- * Проход по элементам при открытии флага:
- * for (ind in flagsNow) {
-val researched = listCell[ind]
-for (i in researched.aroundCell) {
-val cell = listCell[i]
-if (cell.isVisible) {
-checkBeforeFlag.add(cell)
-}
-}
-}
-
-\\\\\\В backlight() было//////
-var temp = checkList.sortedWith(compareBy(Cell::numberOfBombs, Cell::index)).first()
-while (temp.useless) {
-checkList.remove(temp)
-temp = checkList.sortedWith(compareBy(Cell::numberOfBombs, Cell::index)).first()
-}
-if (checkBeforeFlag.isNotEmpty()) {
-temp = checkBeforeFlag.first()
-checkBeforeFlag.remove(temp)
-}
-return temp
+ * 1) Почему я оставил recheck: потому что я хочу проходить сначала по меньшим элементам с наименьшим индексом,
+ * если я буду обратно добавлять, то он опять вернется к ним
  */
-
-
-
-/**
-/**
- * В случае, когда число проверок уже слишком большое, когда мы
- * ходим по одним и тем же элементам, но не можем найти тривиальное решение,
- * то рандомим на одну из закрытых клеток.
- * Однако в случае, когда число проверок больше 2 проходов, то идём в обратном порядке
- * до 4 проходов
-*/
-if (numberOfChecks > indexAndNum.size * 4) {
-for (i in tempMap) {
-cellArea(i.first)
-
-for (ind in listCellArea) {
-when (ind) {
-in openSet -> numOpenAround++
-in setFlags -> numberFlags++
-else -> close.add(ind)
-}
-}
-}
-val openingCell = close.random()
-val numInOpeningCell = listNums[openingCell]
-if (numInOpeningCell == 9) {
-openingNow.add(openingCell)
-boom = true
-}
-else {
-if (numInOpeningCell == 0) {
-emptyCells.add(openingCell)
-empty()
-} else {
-openingNow.add(openingCell)
-openSet.add(openingCell)
-recheck.add(openingCell to listNums[openingCell])
-indexAndNum.add(openingCell to listNums[openingCell])
-cellsWithNums.add(openingCell)
-}
-}
-} else {
-if (numberOfChecks > indexAndNum.size * 2) {
-tempMap.clear()
-tempMap.addAll(indexAndNum.sortedByDescending { it.second; it.first })
-checkBombs()
-}
-}
-        */

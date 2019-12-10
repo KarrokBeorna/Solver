@@ -130,17 +130,31 @@ class Screen: Fragment() {
         }
         setOnMouseClicked {
 
+        }
+    }
+
+    private fun actions() {
+        if (logics.numTrueFlags.value != logics.listBombs.size) {
+
             lights.forEach { it.isVisible = false }
 
-            logics.difficultCase()
+            val act = if (logics.numClicks.value == 0) {
+                logics.firstClick()
+            } else {
+                logics.checkBombs()
+            }
 
-            logics.light.forEach { lights[it.index].isVisible = true }
+            lights[act.index].isVisible = true
 
-            for (i in logics.openingNow) {
+            for (i in act.opening) {
                 frontCells[i].isVisible = false
             }
 
+            for (i in act.flagging) {
+                flags[i].isVisible = true
+            }
         }
+        processTheEnd()
     }
 
     private val next = imageview("/icons/next2.2.png") {
@@ -151,28 +165,7 @@ class Screen: Fragment() {
             font = Font.font(13.0)
         }
         setOnMouseClicked {
-
-            if (logics.numTrueFlags.value != logics.listBombs.size) {
-
-                lights.forEach { it.isVisible = false }
-
-                if (logics.numClicks.value == 0) {
-                    logics.firstClick()
-                } else {
-                    logics.checkBombs()
-                    val current = logics.light[0].index
-                    lights[current].isVisible = true
-                }
-
-                for (i in logics.openingNow) {
-                    frontCells[i].isVisible = false
-                }
-
-                for (i in logics.flagsNow) {
-                    flags[i].isVisible = true
-                }
-            }
-            processTheEnd()
+            actions()
         }
     }
 
@@ -180,32 +173,13 @@ class Screen: Fragment() {
         translateY = 535.0 //524 - up 546 - down
         translateX = 65.0
         isVisible = false
-        tooltip(" Супер быстрое решение при наводке и движении ") {
+        tooltip(" Быстрое решение при наводке и движении ") {
             font = Font.font(13.0)
         }
         setOnMouseMoved {
-
-            if (logics.numTrueFlags.value != logics.listBombs.size) {
-
-                lights.forEach { it.isVisible = false }
-
-                if (logics.numClicks.value == 0) {
-                    logics.firstClick()
-                } else {
-                    logics.checkBombs()
-                    val current = logics.light[0].index
-                    lights[current].isVisible = true
-                }
-
-                for (i in logics.openingNow) {
-                    frontCells[i].isVisible = false
-                }
-
-                for (i in logics.flagsNow) {
-                    flags[i].isVisible = true
-                }
+            if (logics.numberOfChecks <= logics.checkList.size + logics.recheck.size) {
+                actions()
             }
-            processTheEnd()
         }
     }
 
@@ -238,7 +212,7 @@ class Screen: Fragment() {
 
     private fun cellImage() {
         for (i in 0..224) {
-            val cell = imageview("/icons/${logics.listCell[i].numberOfBombs}.png") {
+            val cell = imageview("/icons/${logics.board[i].numberOfBombs}.png") {
                 translateY = 75.0 + (i / 15) * 30          //74 - board, 75-1st, 105-2nd
                 translateX = 21.0 + (i % 15) * 30
                 isVisible = true
@@ -300,7 +274,8 @@ class Screen: Fragment() {
     private fun theEnd(): Int {
         if (logics.numFlags.value == logics.listBombs.size) return 0
         else {
-            if (logics.numTrueFlags.value != logics.numFlags.value || logics.boom) return 1
+            if (logics.numTrueFlags.value != logics.numFlags.value || logics.boom ||
+                logics.numFlags.value > logics.listBombs.size) return 1
         }
         return 2
     }
