@@ -26,6 +26,7 @@ class Logics: Controller() {
     private val openingNow = mutableSetOf<Int>()
     private val flagsNow = mutableSetOf<Int>()
     var boom = false
+    var stop = false
 
     val checkList = mutableSetOf<Cell>()
     val recheck = mutableSetOf<Cell>()
@@ -223,29 +224,7 @@ class Logics: Controller() {
         return temp
     }
 
-    /**
-     * Основная функция обнаружения бомб
-     */
-    fun checkBombs(): Data {
-
-        val current = backlight()
-        val around = around(current)
-        val numOpenAround = around.first
-        val numberFlags = around.second
-        val close = around.third
-
-        /**
-         * Если ячейка еще в списке проверки, но она уже не несет никакой новой информации,
-         * то не наступаем на неё и вообще забываем навсегда
-         */
-        if (numberFlags == close.size + numberFlags) {
-            checkList.remove(current)
-            current.useless = true
-            checkBombs()
-        }
-
-        numClicks.value++
-
+    private fun trivialCheck(current: Cell, numOpenAround: Int, numberFlags: Int, close: MutableSet<Int>) {
         /**
          * Если число ЗАКРЫТЫХ равно числу в ячейке, то
          * помечаем эти ячейки флажками,
@@ -256,7 +235,9 @@ class Logics: Controller() {
          * иначе пока что удаляем элемент из проверки и добавляем
          * его в множество повторных проверок
          */
-        if (current.aroundCell.size - numOpenAround == current.numberOfBombs) {
+        if (numberFlags > current.numberOfBombs || numberFlags + close.size < current.numberOfBombs) {
+            stop = true
+        } else if (current.aroundCell.size - numOpenAround == current.numberOfBombs) {
 
             checkList.remove(current)
             numberOfChecks = 0
@@ -289,6 +270,32 @@ class Logics: Controller() {
             recheck.add(current)
             numberOfChecks++
         }
+    }
+
+    /**
+     * Основная функция обнаружения бомб
+     */
+    fun checkBombs(): Data {
+
+        val current = backlight()
+        val around = around(current)
+        val numOpenAround = around.first
+        val numberFlags = around.second
+        val close = around.third
+
+        /**
+         * Если ячейка еще в списке проверки, но она уже не несет никакой новой информации,
+         * то не наступаем на неё и вообще забываем навсегда
+         */
+        if (numberFlags == close.size + numberFlags) {
+            checkList.remove(current)
+            current.useless = true
+            checkBombs()
+        }
+
+        numClicks.value++
+
+        trivialCheck(current, numOpenAround, numberFlags, close)
 
         if (flagsNow.all { it in listBombs }) numTrueFlags.value = numFlags.value else numTrueFlags.value = 0
 
@@ -306,6 +313,123 @@ class Logics: Controller() {
 
 
     private var immediateCheck: Cell? = null
+
+    fun startSolver(): Pair<MutableSet<Int>, MutableSet<Int>> {
+
+        val close = mutableSetOf<Cell>()
+
+        recheck()
+
+        val temp = mutableSetOf<Cell>()
+        temp.addAll(checkList)
+
+        /**
+         * Добавляем в список закрытых ячеек все закрытые ячейки около исследуемых
+         */
+        for (i in checkList) {
+
+            val around = around(i)
+            around.third.forEach{ close.add(board[it]) }
+
+        }
+
+        /**
+         * Пытаемся симулировать постановку бомбы в каждую закрытую клетку
+         */
+        for (i in close) {
+
+            /**
+             * Пересоздаем первоначальный список исследумых ячеек, убираем остановку
+             */
+            checkList.clear()
+            checkList.addAll(temp)
+            stop = false
+
+            checkList.forEach { it.useless = false }
+            close.forEach { it.isVisible = false; it.flag = false }
+            i.flag = true
+
+            numberOfChecks = 0
+
+            /**
+             * Пока мы не прошли список без изменений дважды и хотя бы один из списков не пуст мы:
+             */
+            while (numberOfChecks < 2 * (checkList.size + recheck.size) &&
+                (checkList.isNotEmpty() || recheck.isNotEmpty()) && !stop && checkList.isNotEmpty()) {
+
+                val current = checkList.first()
+
+                if (!current.useless) {
+
+                    val newAround = around(current)
+                    trivialCheck(current, newAround.first, newAround.second, newAround.third)
+
+                    if (stop) {
+                        openingNow.add(i.index)
+                        break
+                    }
+                }
+
+                if (checkList.isEmpty()) recheck()
+            }
+        }
+
+        /**
+         * Пытаемся симулировать открытие ячейки
+         */
+        for (i in close) {
+
+            checkList.clear()
+            checkList.addAll(temp)
+            stop = false
+
+            checkList.forEach { it.useless = false }
+            close.forEach { it.isVisible = false; it.flag = false }
+            i.isVisible = true
+
+            numberOfChecks = 0
+
+            /**
+             * Пока мы не прошли список без изменений дважды или хотя бы один из списков не пуст мы:
+             */
+            while (numberOfChecks < 2 * (checkList.size + recheck.size) &&
+                (checkList.isNotEmpty() || recheck.isNotEmpty()) && !stop && checkList.isNotEmpty()) {
+
+                val current = checkList.first()
+
+                if (!current.useless) {
+
+                    val newAround = around(current)
+                    trivialCheck(current, newAround.first, newAround.second, newAround.third)
+
+                    if (stop) {
+                        flagsNow.add(i.index)
+                        break
+                    }
+
+                    if (checkList.isEmpty()) recheck()
+                }
+            }
+        }
+
+        return openingNow to flagsNow
+    }
+
+    /**
+     * 1) Запускаем с Экрана
+     * 2) Создаем список списков
+     * 3) Перебираем все закрытые точки, прилегающие к открытым, создаем их список
+     * 4) Предполагаем, что мина в первой клетке списка, пробуем пройти сапёра дальше, открыть эти клетки из списка,
+     * если видим, что у хотя бы одной клетки начинается перебор флагов рядом с ней, или недобор, то там 100% - пусто.
+     * Запоминаем её для открытия.
+     * 5) То есть когда мы поставили первую мину, мы идем по обычному алгоритму, но после каждого ВОЗМОЖНОГО открытия
+     * клетки или флагирования клетки мы перепроверяем все клетки, чтобы не оказалось такого, что стоит лишняя мина,
+     * или не хватает закрытых клеток, чтобы поставить флаги
+     * 6) После каждого прохода мы добавляем список с измененными клетками
+     */
+
+
+
 
     fun difficultCase() {
 

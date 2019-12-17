@@ -130,6 +130,17 @@ class Screen: Fragment() {
         }
         setOnMouseClicked {
 
+            lights.forEach { it.isVisible = false }
+
+            val start = logics.startSolver()
+
+            for (i in start.first) {
+                frontCells[i].isVisible = false
+            }
+
+            for (i in start.second) {
+                flags[i].isVisible = true
+            }
         }
     }
 
