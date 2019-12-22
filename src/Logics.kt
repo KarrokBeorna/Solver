@@ -8,31 +8,36 @@ class Logics: Controller() {
     val numTrueFlags = SimpleIntegerProperty()
     val numClicks = SimpleIntegerProperty()
 
-    /**
-     * Обязательно не data class, потому что с пометкой data
-     * перебор элементов просто не сходит с 1 элемента
-     *
-     * Почему???
-     */
-    class Cell(var isVisible: Boolean = false, var flag: Boolean = false, val numberOfBombs: Int,
-               val aroundCell: List<Int>, val index: Int, var useless: Boolean = false)
+    class Cell(
+        var isVisible: Boolean = false, var flag: Boolean = false, val numberOfBombs: Int,
+        val aroundCell: List<Int>, val index: Int, var useless: Boolean = false
+    )
 
-    /**
-     * Класс для выдачи данных для отображения
-     */
     class Data(val opening: MutableSet<Int>, val flagging: MutableSet<Int>, val index: Int)
 
     val board = mutableListOf<Cell>()
-    private val openingNow = mutableSetOf<Int>()
-    private val flagsNow = mutableSetOf<Int>()
+    val openingNow = mutableSetOf<Int>()
+    val flagsNow = mutableSetOf<Int>()
     var boom = false
-    var stop = false
+
+    /**
+     * Состояния solver'a:
+     * -2 ---------------------- нет сложных ситуаций
+     * -1 ---------------------- разрешение на исследование закрытых клеток
+     * 0..close.size * 2 - 1 --- двойной перебор закрытых клеток: в первом случае - флагами, во втором - открытием
+     * close.size * 2 ---------- выбор между рандомом, если ничего не смог сделать solver,
+     *                           или открытие/флагирование, если solver смог что-то сделать
+     */
+    var solverState = -2
+    var stop = 0
 
     val checkList = mutableSetOf<Cell>()
+    private val tempCheckList = mutableSetOf<Int>()
     val recheck = mutableSetOf<Cell>()
     var numberOfChecks = 0
     val listBombs = mutableListOf<Int>()
-    private val light = mutableListOf<Cell>()
+    private val closed = mutableSetOf<Cell>()
+    val light = mutableSetOf<Cell>()
 
 
     fun elements() {
@@ -50,7 +55,8 @@ class Logics: Controller() {
             if (place !in 96..98 &&
                 place !in 111..113 &&
                 place !in 126..128 &&
-                place !in listBombs) {
+                place !in listBombs
+            ) {
                 listBombs.add(place)
                 numBombs.value++
             }
@@ -69,10 +75,18 @@ class Logics: Controller() {
                     if (ind in listBombs)
                         num++
                 }
-                board.add(Cell(isVisible = false, flag = false,
-                    numberOfBombs = num, aroundCell = cellArea(i),index = i, useless = false))
-            } else board.add(Cell(isVisible = false, flag = false,
-                numberOfBombs = 9, aroundCell = cellArea(i), index = i, useless = false))
+                board.add(
+                    Cell(
+                        isVisible = false, flag = false,
+                        numberOfBombs = num, aroundCell = cellArea(i), index = i, useless = false
+                    )
+                )
+            } else board.add(
+                Cell(
+                    isVisible = false, flag = false,
+                    numberOfBombs = 9, aroundCell = cellArea(i), index = i, useless = false
+                )
+            )
         }
     }
 
@@ -131,8 +145,7 @@ class Logics: Controller() {
                 empty(researched)
                 openingNow.add(i)
 
-            }
-            else if (researched.numberOfBombs in 1..8) {
+            } else if (researched.numberOfBombs in 1..8) {
 
                 openingNow.add(i)
                 checkList.add(researched)
@@ -151,27 +164,26 @@ class Logics: Controller() {
      */
     private fun empty(cell: Cell) {
 
-            cell.isVisible = true
-            cell.useless = true
+        cell.isVisible = true
+        cell.useless = true
 
-            for (i in cell.aroundCell) {
+        for (i in cell.aroundCell) {
 
-                val researched = board[i]
+            val researched = board[i]
 
-                if (researched.numberOfBombs == 0 && !researched.useless) {
+            if (researched.numberOfBombs == 0 && !researched.useless) {
 
-                    empty(researched)
-                    openingNow.add(i)
+                empty(researched)
+                openingNow.add(i)
 
-                }
-                else if (researched.numberOfBombs in 1..8 && !researched.useless) {
+            } else if (researched.numberOfBombs in 1..8 && !researched.useless) {
 
-                    openingNow.add(i)
-                    checkList.add(researched)
-                    researched.isVisible = true
+                openingNow.add(i)
+                checkList.add(researched)
+                researched.isVisible = true
 
-                }
             }
+        }
 
     }
 
@@ -202,28 +214,6 @@ class Logics: Controller() {
         return Triple(numOpenAround, numberFlags, close)
     }
 
-    /**
-     * Выделяем ячейку, которую рассматриваем сейчас:
-     * наименьшее число бомб и наименьший индекс
-     */
-    private fun backlight(): Cell {
-
-        /**
-         * Если список проверок вдруг опустел, то добавляем перепроверяемые
-         * ячейки, это позволит избежать выбрасывания ошибки
-         */
-        if (checkList.isEmpty()) recheck()
-
-        light.clear()
-        openingNow.clear()
-        flagsNow.clear()
-
-        val temp = checkList.sortedWith(compareBy(Cell::numberOfBombs, Cell::index)).first()
-
-        light.add(temp)
-        return temp
-    }
-
     private fun trivialCheck(current: Cell, numOpenAround: Int, numberFlags: Int, close: MutableSet<Int>) {
         /**
          * Если число ЗАКРЫТЫХ равно числу в ячейке, то
@@ -235,9 +225,7 @@ class Logics: Controller() {
          * иначе пока что удаляем элемент из проверки и добавляем
          * его в множество повторных проверок
          */
-        if (numberFlags > current.numberOfBombs || numberFlags + close.size < current.numberOfBombs) {
-            stop = true
-        } else if (current.aroundCell.size - numOpenAround == current.numberOfBombs) {
+        if (current.aroundCell.size - numOpenAround == current.numberOfBombs) {
 
             checkList.remove(current)
             numberOfChecks = 0
@@ -277,22 +265,37 @@ class Logics: Controller() {
      */
     fun checkBombs(): Data {
 
-        val current = backlight()
-        val around = around(current)
-        val numOpenAround = around.first
-        val numberFlags = around.second
-        val close = around.third
+        if (checkList.isEmpty()) recheck()
+
+        var current = checkList.sortedWith(compareBy(Cell::numberOfBombs, Cell::index)).first()
+        var around = around(current)
+        var numOpenAround = around.first
+        var numberFlags = around.second
+        var close = around.third
 
         /**
          * Если ячейка еще в списке проверки, но она уже не несет никакой новой информации,
-         * то не наступаем на неё и вообще забываем навсегда
+         * то не наступаем на неё и больше её не заметим никогда
          */
-        if (numberFlags == close.size + numberFlags) {
+        while (close.isEmpty() || current.useless) {
+
             checkList.remove(current)
-            current.useless = true
-            checkBombs()
+
+            if (checkList.isNotEmpty()) {
+                current.useless = true
+                current = checkList.sortedWith(compareBy(Cell::numberOfBombs, Cell::index)).first()
+                around = around(current)
+                numOpenAround = around.first
+                numberFlags = around.second
+                close = around.third
+            } else recheck()
+
         }
 
+        openingNow.clear()
+        flagsNow.clear()
+        light.clear()
+        light.add(current)
         numClicks.value++
 
         trivialCheck(current, numOpenAround, numberFlags, close)
@@ -306,233 +309,150 @@ class Logics: Controller() {
      * Каждую "небесполезную" перепроверяемую ячейку добавим в список проверок
      */
     private fun recheck() {
-        recheck.forEach{ if(!it.useless) checkList.add(it) }
+        recheck.forEach { if (!it.useless) checkList.add(it) }
         recheck.clear()
     }
 
-
-
-    private var immediateCheck: Cell? = null
-
-    fun startSolver(): Pair<MutableSet<Int>, MutableSet<Int>> {
-
-        val close = mutableSetOf<Cell>()
-
-        recheck()
-
-        val temp = mutableSetOf<Cell>()
-        temp.addAll(checkList)
-
-        /**
-         * Добавляем в список закрытых ячеек все закрытые ячейки около исследуемых
-         */
-        for (i in checkList) {
-
-            val around = around(i)
-            around.third.forEach{ close.add(board[it]) }
-
-        }
-
-        /**
-         * Пытаемся симулировать постановку бомбы в каждую закрытую клетку
-         */
-        for (i in close) {
-
-            /**
-             * Пересоздаем первоначальный список исследумых ячеек, убираем остановку
-             */
-            checkList.clear()
-            checkList.addAll(temp)
-            stop = false
-
-            checkList.forEach { it.useless = false }
-            close.forEach { it.isVisible = false; it.flag = false }
-            i.flag = true
-
-            numberOfChecks = 0
-
-            /**
-             * Пока мы не прошли список без изменений дважды и хотя бы один из списков не пуст мы:
-             */
-            while (numberOfChecks < 2 * (checkList.size + recheck.size) &&
-                (checkList.isNotEmpty() || recheck.isNotEmpty()) && !stop && checkList.isNotEmpty()) {
-
-                val current = checkList.first()
-
-                if (!current.useless) {
-
-                    val newAround = around(current)
-                    trivialCheck(current, newAround.first, newAround.second, newAround.third)
-
-                    if (stop) {
-                        openingNow.add(i.index)
-                        break
-                    }
-                }
-
-                if (checkList.isEmpty()) recheck()
-            }
-        }
-
-        /**
-         * Пытаемся симулировать открытие ячейки
-         */
-        for (i in close) {
-
-            checkList.clear()
-            checkList.addAll(temp)
-            stop = false
-
-            checkList.forEach { it.useless = false }
-            close.forEach { it.isVisible = false; it.flag = false }
-            i.isVisible = true
-
-            numberOfChecks = 0
-
-            /**
-             * Пока мы не прошли список без изменений дважды или хотя бы один из списков не пуст мы:
-             */
-            while (numberOfChecks < 2 * (checkList.size + recheck.size) &&
-                (checkList.isNotEmpty() || recheck.isNotEmpty()) && !stop && checkList.isNotEmpty()) {
-
-                val current = checkList.first()
-
-                if (!current.useless) {
-
-                    val newAround = around(current)
-                    trivialCheck(current, newAround.first, newAround.second, newAround.third)
-
-                    if (stop) {
-                        flagsNow.add(i.index)
-                        break
-                    }
-
-                    if (checkList.isEmpty()) recheck()
-                }
-            }
-        }
-
-        return openingNow to flagsNow
-    }
+    private val oldClosed = mutableSetOf<Int>()
 
     /**
-     * 1) Запускаем с Экрана
-     * 2) Создаем список списков
-     * 3) Перебираем все закрытые точки, прилегающие к открытым, создаем их список
-     * 4) Предполагаем, что мина в первой клетке списка, пробуем пройти сапёра дальше, открыть эти клетки из списка,
-     * если видим, что у хотя бы одной клетки начинается перебор флагов рядом с ней, или недобор, то там 100% - пусто.
-     * Запоминаем её для открытия.
-     * 5) То есть когда мы поставили первую мину, мы идем по обычному алгоритму, но после каждого ВОЗМОЖНОГО открытия
-     * клетки или флагирования клетки мы перепроверяем все клетки, чтобы не оказалось такого, что стоит лишняя мина,
-     * или не хватает закрытых клеток, чтобы поставить флаги
-     * 6) После каждого прохода мы добавляем список с измененными клетками
+     * Добавление закрытых клеток для исследования
      */
+    fun researchedClosed() {
 
+        numberOfChecks = 0
+        openingNow.clear()
+        flagsNow.clear()
+        recheck()
 
-
-
-    fun difficultCase() {
-
-        light.clear()
-
-        for (cell in checkList) {
-
-            /**
-             * Первый случай - поиск двойки и прилегающие к ней единицы
-             */
-            val deuceIndex = cell.index
-            val around = around(cell)
-
-            val left = board[deuceIndex - 1]
-            val right = board[deuceIndex + 1]
-            val top = board[deuceIndex - 15]
-            val bot = board[deuceIndex + 15]
-
-            val aroundLeft = around(left)
-            val aroundRight = around(right)
-            val aroundTop = around(top)
-            val aroundBot = around(bot)
-
-            val newNumInLeft = left.numberOfBombs - aroundLeft.second
-            val newNumInRight = right.numberOfBombs - aroundRight.second
-            val newNumInTop = top.numberOfBombs - aroundTop.second
-            val newNumInBot = bot.numberOfBombs - aroundBot.second
-
-
-
-            if (deuceIndex % 15 in 1..13 &&
-                deuceIndex / 15 in 1..13 &&
-                cell.numberOfBombs == 2) {
-
-                if (left.numberOfBombs == 1 && right.numberOfBombs == 1 && left.isVisible && right.isVisible) {
-
-                    light.addAll(listOf(cell, left, right))
-                    val opening = listOf(deuceIndex - 15, deuceIndex + 15)
-                    openingNow.addAll(opening)
-                    opening.forEach { board[it].isVisible = true }
-                    immediateCheck = cell
-
-                    break
-                } else if (top.numberOfBombs == 1 && bot.numberOfBombs == 1 && top.isVisible && bot.isVisible) {
-
-                    light.addAll(listOf(cell, top, bot))
-                    val opening = listOf(deuceIndex - 1, deuceIndex + 1)
-                    openingNow.addAll(opening)
-                    opening.forEach { board[it].isVisible = true }
-                    immediateCheck = cell
-
-                    break
-                }
-
-            }
-
-            /**
-             * Второй случай - поиск "двойки" и прилегающая к ней "единица"
-             */
-
-            if (deuceIndex % 15 in 1..13 &&
-                deuceIndex / 15 in 1..13 &&
-                cell.numberOfBombs - around.second == 2 &&
-                around.first == 5) {
-
-                fun flagAndVoid(opening: Cell) {
-                    val temp = mutableListOf<Int>()
-                    for (i in opening.aroundCell) {
-                        if (i !in cell.aroundCell && (i == opening.index + 16 ||
-                                    i == opening.index + 14 || i == opening.index - 14 || i == opening.index - 16)) {
-                            temp.add(i)
-                        }
-                    }
-
-                }
-
-                if (newNumInTop == 1 && deuceIndex >= 30) {
-                    flagAndVoid(top)
-                    break
-                }
-                else if (newNumInBot == 1 && deuceIndex <= 194) {
-                    flagAndVoid(bot)
-                    break
-                }
-                else if (newNumInLeft == 1 && deuceIndex % 15 >= 2) {
-                    flagAndVoid(left)
-                    break
-                }
-                else if (newNumInRight == 1 && deuceIndex % 15 <= 12) {
-                    flagAndVoid(right)
-                    break
-                }
-            }
+        for (i in checkList) {
+            val around = around(i)
+            around.third.forEach { closed.add(board[it]) }
         }
 
+        stop = closed.size * 2
+        checkList.forEach { tempCheckList.add(it.index) }
+        solverState++
+        closed.forEach { oldClosed.add(it.index) }
+    }
+
+    fun update() {
+
+        numberOfChecks = 0
+        checkList.clear()
+        oldClosed.forEach { board[it].isVisible = false; board[it].flag = false }
+        tempCheckList.forEach { checkList.add(board[it]); board[it].useless = false }
+
+        solverState++
+
+        if (closed.isEmpty()) {
+            oldClosed.forEach { closed.add(board[it]) }
+        }
+
+    }
+
+    private fun forSolver(tempList: MutableSet<Int>, current: Cell) {
+
+        if (numberOfChecks > 2 * (checkList.size + recheck.size) || checkList.isEmpty() && recheck.isEmpty()) {
+
+            closed.remove(current)
+            update()
+
+        } else {
+
+            val cell = checkList.sortedBy { it.index }.first()
+            val around = around(cell)
+            val numOpenAround = around.first
+            val numberFlags = around.second
+            val close = around.third
+
+            light.add(cell)
+
+            if (numberFlags > cell.numberOfBombs || (close.size + numberFlags) < cell.numberOfBombs) {
+
+                tempList.add(current.index)
+                closed.remove(current)
+                update()
+
+            } else if (cell.aroundCell.size - numOpenAround == cell.numberOfBombs) {
+
+                checkList.remove(cell)
+                cell.useless = true
+                numberOfChecks = 0
+
+                for (i in close) {
+                    board[i].flag = true
+                }
+
+            } else if (numberFlags == cell.numberOfBombs) {
+
+                checkList.remove(cell)
+                cell.useless = true
+                numberOfChecks = 0
+
+                for (i in close) {
+                    board[i].isVisible = true
+                }
+
+            } else {
+                checkList.remove(cell)
+                recheck.add(cell)
+                numberOfChecks++
+            }
+
+        }
+    }
+
+    fun solve(): MutableSet<Cell> {
+
+        light.clear()
+        if (checkList.isEmpty()) recheck()
+        val current = closed.sortedBy { it.index }.first()
+        light.add(current)
+
+        if (solverState < stop / 2) {
+
+            board[current.index].flag = true
+
+            forSolver(openingNow, current)
+
+        } else {
+
+            board[current.index].isVisible = true
+
+            forSolver(flagsNow, current)
+
+        }
+
+        return light
+    }
+
+    fun randOrAct(): Pair<MutableSet<Int>, MutableSet<Int>> {
+
+        solverState = -2
+        tempCheckList.clear()
+        oldClosed.clear()
+        numClicks.value++
+
+        return if (flagsNow.isNotEmpty() || openingNow.isNotEmpty()) {
+            if (openingNow.isNotEmpty()) {
+                openingNow.forEach { board[it].isVisible = true; checkList.add(board[it]) }
+            }
+            else flagsNow.forEach { board[it].flag = true }
+            openingNow to flagsNow
+        } else {
+            val open = closed.random()
+            if (open.index in listBombs) boom = true
+            else {
+                board[open.index].isVisible = true
+                checkList.add(open)
+            }
+            println("${board[open.index].isVisible}")
+            mutableSetOf(open.index) to mutableSetOf()
+        }
     }
 }
 
-
-/**
- * !!!NEED!!!
- * solver для сложных случаев
- */
 
 /**
  * Добавить случай, когда угловая клетка огорожена бомбами, но в ней самой нет бомб (нужно смотреть на кол-во флажков)

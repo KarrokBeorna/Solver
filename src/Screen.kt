@@ -125,27 +125,41 @@ class Screen: Fragment() {
         translateY = 535.0 //524 - up 546 - down
         translateX = 235.0
         isVisible = false
-        tooltip(" Решение 1 хода в сложных случаях ") {
+        tooltip(" Решатель сложных случаев ") {
             font = Font.font(13.0)
         }
         setOnMouseClicked {
 
-            lights.forEach { it.isVisible = false }
+            if (logics.solverState == -1) {
+                lights.forEach { it.isVisible = false }
 
-            val start = logics.startSolver()
+                logics.researchedClosed()
+            } else if (logics.solverState == logics.stop) {
 
-            for (i in start.first) {
-                frontCells[i].isVisible = false
+                logics.update()
+                val act = logics.randOrAct()
+
+                act.first.forEach { frontCells[it].isVisible = false; lights[it].isVisible = true }
+                act.second.forEach { flags[it].isVisible = true; lights[it].isVisible = true }
+
+                processTheEnd()
+
             }
+        }
+        setOnMouseMoved {
+            if (logics.solverState in 0 until logics.stop) {
 
-            for (i in start.second) {
-                flags[i].isVisible = true
+                lights.forEach { it.isVisible = false }
+
+                val act = logics.solve()
+
+                act.forEach { lights[it.index].isVisible = true }
             }
         }
     }
 
-    private fun actions() {
-        if (logics.numTrueFlags.value != logics.listBombs.size) {
+    private fun acts() {
+        if (logics.numTrueFlags.value < logics.listBombs.size) {
 
             lights.forEach { it.isVisible = false }
 
@@ -176,7 +190,9 @@ class Screen: Fragment() {
             font = Font.font(13.0)
         }
         setOnMouseClicked {
-            actions()
+            if (logics.numberOfChecks <= 2 * (logics.checkList.size + logics.recheck.size) && logics.solverState == -2) {
+                acts()
+            } else logics.solverState = -1
         }
     }
 
@@ -188,9 +204,9 @@ class Screen: Fragment() {
             font = Font.font(13.0)
         }
         setOnMouseMoved {
-            if (logics.numberOfChecks <= logics.checkList.size + logics.recheck.size) {
-                actions()
-            }
+            if (logics.numberOfChecks <= 2 * (logics.checkList.size + logics.recheck.size) && logics.solverState == -2) {
+                acts()
+            } else logics.solverState = -1
         }
     }
 
