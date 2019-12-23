@@ -11,6 +11,7 @@ class Screen: Fragment() {
 
     private val logics: Logics by inject()
 
+    private val listCells = mutableListOf<ImageView>()
     private val frontCells = mutableListOf<Label>()
     private val lights = mutableListOf<ImageView>()
     private val flags = mutableListOf<ImageView>()
@@ -134,7 +135,8 @@ class Screen: Fragment() {
                 lights.forEach { it.isVisible = false }
 
                 logics.researchedClosed()
-            } else if (logics.solverState == logics.stop) {
+            } else if (logics.solverState == logics.stop || logics.stop == 500 || 
+                logics.openingNow.isNotEmpty() || logics.flagsNow.isNotEmpty()) {
 
                 logics.update()
                 val act = logics.randOrAct()
@@ -147,7 +149,7 @@ class Screen: Fragment() {
             }
         }
         setOnMouseMoved {
-            if (logics.solverState in 0 until logics.stop) {
+            if (logics.solverState in 0 until logics.stop && logics.openingNow.isEmpty() && logics.flagsNow.isEmpty()) {
 
                 lights.forEach { it.isVisible = false }
 
@@ -244,6 +246,7 @@ class Screen: Fragment() {
                 translateX = 21.0 + (i % 15) * 30
                 isVisible = true
             }
+            listCells.add(cell)
         }
     }
 
@@ -294,12 +297,45 @@ class Screen: Fragment() {
             setOnMouseClicked {
                 theEnd.forEach { it.isVisible = false }
                 opening.isVisible = true
+                theEnd[3].isVisible = true
+                checkbox.isVisible = false
+                trueCheckbox.isVisible = false
             }
         }
         theEnd.add(what)
+        val restart = imageview("/icons/restart.png") {
+            translateX = 213.0
+            translateY = 4.0
+            isVisible = false
+            setOnMouseClicked {
+                logics.restart()
+
+                listCells.forEach { it.isVisible = false }
+                listCells.clear()
+                cellImage()
+                frontCells.clear()
+                flags.clear()
+                lights.forEach { it.isVisible = false }
+                lights.clear()
+                theEnd.forEach { it.isVisible = false }
+                theEnd.clear()
+
+
+                mines.bind(logics.numBombs)
+                isVisible = false
+                checkbox.isVisible = true
+                trueCheckbox.isVisible = true
+                opening.isVisible = false
+                closingCells()
+                backlight()
+                flags()
+                imageTheEnd()
+            }
+        }
+        theEnd.add(restart)
     }
     private fun theEnd(): Int {
-        if (logics.numFlags.value == logics.listBombs.size) return 0
+        if (logics.numTrueFlags.value == logics.listBombs.size) return 0
         else {
             if (logics.numTrueFlags.value != logics.numFlags.value || logics.boom ||
                 logics.numFlags.value > logics.listBombs.size) return 1

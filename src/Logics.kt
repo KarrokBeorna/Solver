@@ -25,8 +25,7 @@ class Logics: Controller() {
      * -2 ---------------------- нет сложных ситуаций
      * -1 ---------------------- разрешение на исследование закрытых клеток
      * 0..close.size * 2 - 1 --- двойной перебор закрытых клеток: в первом случае - флагами, во втором - открытием
-     * close.size * 2 ---------- выбор между рандомом, если ничего не смог сделать solver,
-     *                           или открытие/флагирование, если solver смог что-то сделать
+     * close.size * 2 ---------- рандомим клетку, т.к. нет подходящих случаев
      */
     var solverState = -2
     var stop = 0
@@ -37,9 +36,11 @@ class Logics: Controller() {
     var numberOfChecks = 0
     val listBombs = mutableListOf<Int>()
     private val closed = mutableSetOf<Cell>()
-    val light = mutableSetOf<Cell>()
+    private val light = mutableSetOf<Cell>()
 
-
+    /**
+     * Загрузка начальных элементов
+     */
     fun elements() {
         bombs()
         cells()
@@ -314,26 +315,37 @@ class Logics: Controller() {
     }
 
     private val oldClosed = mutableSetOf<Int>()
+    private val allClosed = mutableListOf<Cell>()
+
 
     /**
      * Добавление закрытых клеток для исследования
      */
     fun researchedClosed() {
 
-        numberOfChecks = 0
-        openingNow.clear()
-        flagsNow.clear()
-        recheck()
+        if (checkList.isEmpty() && recheck.isEmpty()) {
 
-        for (i in checkList) {
-            val around = around(i)
-            around.third.forEach { closed.add(board[it]) }
+            board.forEach { if (!it.isVisible && !it.flag) allClosed.add(it)}
+            stop = 500
+
+            if (allClosed.size + numTrueFlags.value == listBombs.size) allClosed.forEach { flagsNow.add(it.index) }
+
+        } else {
+            numberOfChecks = 0
+            openingNow.clear()
+            flagsNow.clear()
+            recheck()
+
+            for (i in checkList) {
+                val around = around(i)
+                around.third.forEach { closed.add(board[it]) }
+            }
+
+            stop = closed.size * 2
+            checkList.forEach { tempCheckList.add(it.index) }
+            solverState++
+            closed.forEach { oldClosed.add(it.index) }
         }
-
-        stop = closed.size * 2
-        checkList.forEach { tempCheckList.add(it.index) }
-        solverState++
-        closed.forEach { oldClosed.add(it.index) }
     }
 
     fun update() {
@@ -353,14 +365,14 @@ class Logics: Controller() {
 
     private fun forSolver(tempList: MutableSet<Int>, current: Cell) {
 
-        if (numberOfChecks > 2 * (checkList.size + recheck.size) || checkList.isEmpty() && recheck.isEmpty()) {
+        if (numberOfChecks > (checkList.size + recheck.size + 1) || checkList.isEmpty() && recheck.isEmpty()) {
 
             closed.remove(current)
             update()
 
         } else {
 
-            val cell = checkList.sortedBy { it.index }.first()
+            val cell = checkList.minBy { it.index }!!
             val around = around(cell)
             val numOpenAround = around.first
             val numberFlags = around.second
@@ -407,7 +419,7 @@ class Logics: Controller() {
 
         light.clear()
         if (checkList.isEmpty()) recheck()
-        val current = closed.sortedBy { it.index }.first()
+        val current = closed.minBy { it.index }!!
         light.add(current)
 
         if (solverState < stop / 2) {
@@ -429,27 +441,65 @@ class Logics: Controller() {
 
     fun randOrAct(): Pair<MutableSet<Int>, MutableSet<Int>> {
 
+        light.clear()
         solverState = -2
         tempCheckList.clear()
         oldClosed.clear()
         numClicks.value++
 
         return if (flagsNow.isNotEmpty() || openingNow.isNotEmpty()) {
-            if (openingNow.isNotEmpty()) {
-                openingNow.forEach { board[it].isVisible = true; checkList.add(board[it]) }
+
+            if (openingNow.isNotEmpty()) openingNow.forEach { board[it].isVisible = true; checkList.add(board[it]) }
+            if (flagsNow.isNotEmpty()) {
+                flagsNow.forEach { board[it].flag = true }
+                numFlags.value += flagsNow.size
+                numTrueFlags.value += flagsNow.size
             }
-            else flagsNow.forEach { board[it].flag = true }
+            closed.clear()
             openingNow to flagsNow
+
+        } else if (stop == 500) {
+
+            val open = allClosed.random()
+            if (open.index in listBombs) boom = true
+            else {
+                board[open.index].isVisible = true
+                checkList.add(open)
+            }
+            closed.clear()
+            mutableSetOf(open.index) to mutableSetOf()
+
         } else {
+
             val open = closed.random()
             if (open.index in listBombs) boom = true
             else {
                 board[open.index].isVisible = true
                 checkList.add(open)
             }
-            println("${board[open.index].isVisible}")
+            closed.clear()
             mutableSetOf(open.index) to mutableSetOf()
+
         }
+    }
+
+    fun restart() {
+        board.clear()
+        checkList.clear()
+        recheck.clear()
+        listBombs.clear()
+        numberOfChecks = 0
+        solverState = -2
+        stop = 0
+        openingNow.clear()
+        flagsNow.clear()
+        light.clear()
+        boom = false
+        numTrueFlags.value = 0
+        numFlags.value = 0
+        numClicks.value = 0
+        numBombs.value = 0
+        elements()
     }
 }
 
