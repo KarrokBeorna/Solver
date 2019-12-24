@@ -192,9 +192,11 @@ class Screen: Fragment() {
             font = Font.font(13.0)
         }
         setOnMouseClicked {
-            if (logics.numberOfChecks <= 2 * (logics.checkList.size + logics.recheck.size) && logics.solverState == -2) {
-                acts()
-            } else logics.solverState = -1
+            if (logics.solverState == -2) {
+                if (logics.numberOfChecks <= 2 * (logics.checkList.size + logics.recheck.size)) {
+                    acts()
+                } else logics.solverState = -1
+            }
         }
     }
 
@@ -206,9 +208,11 @@ class Screen: Fragment() {
             font = Font.font(13.0)
         }
         setOnMouseMoved {
-            if (logics.numberOfChecks <= 2 * (logics.checkList.size + logics.recheck.size) && logics.solverState == -2) {
-                acts()
-            } else logics.solverState = -1
+            if (logics.solverState == -2) {
+                if (logics.numberOfChecks <= 2 * (logics.checkList.size + logics.recheck.size)) {
+                    acts()
+                } else logics.solverState = -1
+            }
         }
     }
 
