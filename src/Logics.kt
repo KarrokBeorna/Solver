@@ -35,7 +35,6 @@ class Logics: Controller() {
     val recheck = mutableSetOf<Cell>()
     var numberOfChecks = 0
     val listBombs = mutableListOf<Int>()
-    private val closed = mutableSetOf<Cell>()
     private val light = mutableSetOf<Cell>()
 
     /**
@@ -317,6 +316,7 @@ class Logics: Controller() {
         recheck.clear()
     }
 
+    private val closed = mutableSetOf<Cell>()
     private val oldClosed = mutableSetOf<Int>()
     private val allClosed = mutableListOf<Cell>()
 
@@ -507,16 +507,6 @@ class Logics: Controller() {
     }
 }
 
-
-/**
- * Добавить случай, когда угловая клетка огорожена бомбами, но в ней самой нет бомб (нужно смотреть на кол-во флажков)
- * ?    ?   х   1
- * х    х   х   2
- * 2    2   1   1
- * Добавить рандом в клетки с "?"
- *
- * Добавить проверку на равенство закрытых клеток и кол-ва бомб, то есть добавить список закрытых клеток
- */
 
 /**
  * 1) Почему я оставил recheck: потому что я хочу проходить сначала по меньшим элементам с наименьшим индексом,
