@@ -41,7 +41,7 @@ class Logics: Controller() {
     /**
      * Загрузка начальных элементов
      */
-    fun elements() {
+    private fun elements() {
         bombs()
         cells()
     }
@@ -215,6 +215,9 @@ class Logics: Controller() {
         return Triple(numOpenAround, numberFlags, close)
     }
 
+    /**
+     * Функция для простейшей проверки
+     */
     private fun trivialCheck(current: Cell, numOpenAround: Int, numberFlags: Int, close: MutableSet<Int>) {
         /**
          * Если число ЗАКРЫТЫХ равно числу в ячейке, то
@@ -235,7 +238,7 @@ class Logics: Controller() {
                 board[i].flag = true
                 numFlags.value++
             }
-            current.useless = true
+                current.useless = true
 
         } else if (numberFlags == current.numberOfBombs) {
 
@@ -280,10 +283,10 @@ class Logics: Controller() {
          */
         while (close.isEmpty() || current.useless) {
 
+            current.useless = true
             checkList.remove(current)
 
             if (checkList.isNotEmpty()) {
-                current.useless = true
                 current = checkList.sortedWith(compareBy(Cell::numberOfBombs, Cell::index)).first()
                 around = around(current)
                 numOpenAround = around.first
@@ -323,18 +326,19 @@ class Logics: Controller() {
      */
     fun researchedClosed() {
 
+        recheck()
+        numberOfChecks = 0
+        openingNow.clear()
+        flagsNow.clear()
+
         if (checkList.isEmpty() && recheck.isEmpty()) {
 
             board.forEach { if (!it.isVisible && !it.flag) allClosed.add(it)}
-            stop = 500
+            stop = -1
 
             if (allClosed.size + numTrueFlags.value == listBombs.size) allClosed.forEach { flagsNow.add(it.index) }
 
         } else {
-            numberOfChecks = 0
-            openingNow.clear()
-            flagsNow.clear()
-            recheck()
 
             for (i in checkList) {
                 val around = around(i)
@@ -351,7 +355,6 @@ class Logics: Controller() {
     fun update() {
 
         numberOfChecks = 0
-        checkList.clear()
         oldClosed.forEach { board[it].isVisible = false; board[it].flag = false }
         tempCheckList.forEach { checkList.add(board[it]); board[it].useless = false }
 
@@ -446,6 +449,7 @@ class Logics: Controller() {
         tempCheckList.clear()
         oldClosed.clear()
         numClicks.value++
+        recheck()
 
         return if (flagsNow.isNotEmpty() || openingNow.isNotEmpty()) {
 
@@ -458,7 +462,7 @@ class Logics: Controller() {
             closed.clear()
             openingNow to flagsNow
 
-        } else if (stop == 500) {
+        } else if (stop == -1) {
 
             val open = allClosed.random()
             if (open.index in listBombs) boom = true

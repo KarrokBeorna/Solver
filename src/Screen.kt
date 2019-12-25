@@ -16,35 +16,49 @@ class Screen: Fragment() {
     private val lights = mutableListOf<ImageView>()
     private val flags = mutableListOf<ImageView>()
 
-    private val start = label("Начало игры") {
+    private val start = imageview("/icons/start.png") {
         translateY = 235.0
         translateX = 120.0
-        prefWidth = 250.0
-        prefHeight = 121.0
-        alignment = Pos.CENTER
-        style {
-            backgroundColor += Color.GREENYELLOW
-            fontSize = 30.px
-        }
         isVisible = true
         setOnMouseClicked {
-            logics.elements()
-            mines.isVisible = true
-            mines.bind(logics.numBombs)
-            checkbox.isVisible = true
-            trueCheckbox.isVisible = true
-            clicks.isVisible = true
-            board.isVisible = true
-            nextnext.isVisible = true
-            next.isVisible = true
-            fastnext.isVisible = true
-            cellImage()
-            closingCells()
-            backlight()
-            flags()
-            imageTheEnd()
-            isVisible = false
+            start()
         }
+    }
+
+    /**
+     * Функция одновременно и для начального запуска и для перезапуска
+     */
+    private fun start() {
+        logics.restart()
+
+        listCells.forEach { it.isVisible = false }
+        lights.forEach { it.isVisible = false }
+        theEnd.forEach { it.isVisible = false }
+
+        theEnd.clear()
+        listCells.clear()
+        frontCells.clear()
+        flags.clear()
+        lights.clear()
+
+        mines.isVisible = true
+        checkbox.isVisible = true
+        trueCheckbox.isVisible = true
+        clicks.isVisible = true
+        board.isVisible = true
+        nextnext.isVisible = true
+        next.isVisible = true
+        fastnext.isVisible = true
+
+        opening.isVisible = false
+
+        cellImage()
+        closingCells()
+        backlight()
+        flags()
+        imageTheEnd()
+        start.isVisible = false
+        theEnd[3].isVisible = false
     }
 
     private val mines = label {
@@ -61,6 +75,7 @@ class Screen: Fragment() {
         tooltip("Кол-во оставшихся мин") {
             font = Font.font(13.0)
         }
+        bind(logics.numBombs)
     }
     private val checkbox = label {
         translateY = 12.0
@@ -132,10 +147,11 @@ class Screen: Fragment() {
         setOnMouseClicked {
 
             if (logics.solverState == -1) {
-                lights.forEach { it.isVisible = false }
 
+                lights.forEach { it.isVisible = false }
                 logics.researchedClosed()
-            } else if (logics.solverState == logics.stop || logics.stop == 500 || 
+
+            } else if (logics.solverState == logics.stop || logics.stop == -1 ||
                 logics.openingNow.isNotEmpty() || logics.flagsNow.isNotEmpty()) {
 
                 logics.update()
@@ -152,10 +168,9 @@ class Screen: Fragment() {
             if (logics.solverState in 0 until logics.stop && logics.openingNow.isEmpty() && logics.flagsNow.isEmpty()) {
 
                 lights.forEach { it.isVisible = false }
-
                 val act = logics.solve()
-
                 act.forEach { lights[it.index].isVisible = true }
+
             }
         }
     }
@@ -193,9 +208,15 @@ class Screen: Fragment() {
         }
         setOnMouseClicked {
             if (logics.solverState == -2) {
-                if (logics.numberOfChecks <= 2 * (logics.checkList.size + logics.recheck.size)) {
+                if (logics.numberOfChecks <= (logics.checkList.size + logics.recheck.size + 1)) {
                     acts()
                 } else logics.solverState = -1
+            } else if (logics.solverState in 0 until logics.stop && logics.openingNow.isEmpty() && logics.flagsNow.isEmpty()) {
+
+                lights.forEach { it.isVisible = false }
+                val act = logics.solve()
+                act.forEach { lights[it.index].isVisible = true }
+
             }
         }
     }
@@ -209,7 +230,7 @@ class Screen: Fragment() {
         }
         setOnMouseMoved {
             if (logics.solverState == -2) {
-                if (logics.numberOfChecks <= 2 * (logics.checkList.size + logics.recheck.size)) {
+                if (logics.numberOfChecks <= (logics.checkList.size + logics.recheck.size + 1)) {
                     acts()
                 } else logics.solverState = -1
             }
@@ -312,28 +333,7 @@ class Screen: Fragment() {
             translateY = 4.0
             isVisible = false
             setOnMouseClicked {
-                logics.restart()
-
-                listCells.forEach { it.isVisible = false }
-                listCells.clear()
-                cellImage()
-                frontCells.clear()
-                flags.clear()
-                lights.forEach { it.isVisible = false }
-                lights.clear()
-                theEnd.forEach { it.isVisible = false }
-                theEnd.clear()
-
-
-                mines.bind(logics.numBombs)
-                isVisible = false
-                checkbox.isVisible = true
-                trueCheckbox.isVisible = true
-                opening.isVisible = false
-                closingCells()
-                backlight()
-                flags()
-                imageTheEnd()
+                start()
             }
         }
         theEnd.add(restart)
